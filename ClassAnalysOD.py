@@ -37,20 +37,25 @@ class AnalyseOD:
 
     def calculate_OD(self) -> np.ndarray:
         # Calculate optical density
-        x_start: int = self.normalization_ROI[0]
-        x_end: int = self.normalization_ROI[1]
-        y_start: int = self.normalization_ROI[2]
-        y_end: int = self.normalization_ROI[3]
+        if self.normqlization_roi != None:
+            x_start: int = self.normalization_ROI[0]
+            x_end: int = self.normalization_ROI[1]
+            y_start: int = self.normalization_ROI[2]
+            y_end: int = self.normalization_ROI[3]
         
-        roi: np.ndarray = self.dark_image[y_start:y_end, x_start:x_end]
-        mean_value: float = np.mean(roi)
-        normalized_dark_image: np.ndarray = self.dark_image / mean_value
-        normalized_bright_image: np.ndarray = self.bright_image / mean_value
+            roi: np.ndarray = self.dark_image[y_start:y_end, x_start:x_end]
+            mean_value: float = np.mean(roi)
+            normalized_dark_image: np.ndarray = self.dark_image / mean_value
+            normalized_bright_image: np.ndarray = self.bright_image / mean_value
+            mask: np.ndarray = (normalized_dark_image != 0) & (normalized_bright_image != 0)
+            self.dark_image[self.dark_image == 0] = 1e-6
+            optical_density: np.ndarray = np.zeros_like(self.dark_image)
+            optical_density[mask] = np.log10(normalized_bright_image[mask] / normalized_dark_image[mask])
         self.dark_image[self.dark_image == 0] = 1e-6
-        mask: np.ndarray = (normalized_dark_image != 0) & (normalized_bright_image != 0)
-
         optical_density: np.ndarray = np.zeros_like(self.dark_image)
-        optical_density[mask] = np.log10(normalized_bright_image[mask] / normalized_dark_image[mask])
+        optical_density = np.log10(normalized_bright_image / normalized_dark_image)
+
+        
 
         max_OD: float = np.amax(optical_density) 
         optical_density[optical_density == 0] = max_OD
