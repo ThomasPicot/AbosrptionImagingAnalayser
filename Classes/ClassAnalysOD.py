@@ -85,7 +85,17 @@ class AnalyseOD:
         roi_x_end: int = self.analys_ROI[1]
         roi_y_start: int = self.analys_ROI[2]
         roi_y_end: int = self.analys_ROI[3]
-        
+        #roi: np.ndarray = self.dark_image[y_start:y_end, x_start:x_end]
+        roi_OD: np.ndarray = OD[roi_y_start:roi_y_end, roi_x_start:roi_x_end]
+        gauss_1D = np.sum(roi_OD, axis=0)/np.shape(roi_OD)[0]
+        initial_guesses = (np.amax(gauss_1D), np.mean(gauss_1D), np.std(gauss_1D))
+        print(np.std(gauss_1D))
+        x = range(len(roi_OD[0]))
+        popt, pcov = curve_fit(gaussian, x, gauss_1D, p0=initial_guesses)
+        gauss_1D_fitted = gaussian(range(len(roi_OD[0])), *popt)
+
+        parameters_uncertainty = determine_uncertainty(popt=popt, pcov=pcov,x=x, OD_prof=gauss_1D)
+        return gauss_1D, gauss_1D_fitted, popt, parameters_uncertainty
         
 
         
