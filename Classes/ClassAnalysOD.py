@@ -24,8 +24,8 @@
 
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+
 
 class AnalyseOD:
     def __init__(self, images: list, analys_ROI: list = None, normalization_ROI: list = None) -> None:
@@ -36,8 +36,8 @@ class AnalyseOD:
         self.normalization_ROI: list = normalization_ROI
 
     def calculate_OD(self) -> np.ndarray:
-        # Calculate optical density
-        if self.normqlization_roi != None:
+        # Calcute optical density
+        if self.normalization_ROI is not None:
             x_start: int = self.normalization_ROI[0]
             x_end: int = self.normalization_ROI[1]
             y_start: int = self.normalization_ROI[2]
@@ -51,14 +51,16 @@ class AnalyseOD:
             self.dark_image[self.dark_image == 0] = 1e-6
             optical_density: np.ndarray = np.zeros_like(self.dark_image)
             optical_density[mask] = np.log10(normalized_bright_image[mask] / normalized_dark_image[mask])
-        self.dark_image[self.dark_image == 0] = 1e-6
-        optical_density: np.ndarray = np.zeros_like(self.dark_image)
-        optical_density = np.log10(normalized_bright_image / normalized_dark_image)
+            
+        else:
+            self.dark_image[self.dark_image == 0] = 1e-6
+            optical_density: np.ndarray = np.zeros_like(self.dark_image)
+            optical_density = np.log10(self.bright_image / self.dark_image)
 
         
 
         max_OD: float = np.amax(optical_density) 
-        optical_density[optical_density == 0] = max_OD
+        optical_density[mask][optical_density[mask] == 0] = max_OD
 
         return optical_density
     
@@ -67,30 +69,6 @@ class AnalyseOD:
         def gaussian(x: np.ndarray, amplitude: float, mean: float, stddev: float) -> np.ndarray:
             return amplitude * np.exp(-((x - mean) / stddev) ** 2 / 2)
         
-        roi_x_start: int = self.analys_ROI[0]
-        roi_x_end: int = self.analys_ROI[1]
-        roi_y_start: int = self.analys_ROI[2]
-        roi_y_end: int = self.analys_ROI[3]
-        roi_OD: np.ndarray = OD[roi_y_end:roi_y_start, roi_x_start:roi_x_end]
-        
-        # Grid for the image 
-        x: np.ndarray = np.arange(OD.shape[1])
-        y: np.ndarray = np.arange(OD.shape[0])
-        OD_x: np.ndarray = OD[int(roi_x_end - roi_x_start), :]
-        OD_y: np.ndarray = OD[:, int(roi_y_start - roi_y_end)]
-
-        # Initial guesses for the fits
-        initial_guess_x: tuple = (np.amax(OD_x), np.mean(OD_x), np.std(OD_x))
-        initial_guess_y: tuple = (np.amax(OD_y), np.mean(OD_y), np.std(OD_y))
-        
-        # Curve fitting
-        poptx, pcovx = curve_fit(gaussian, x, OD_x, p0=initial_guess_x)
-        popty, pcovy = curve_fit(gaussian, y, OD_y, p0=initial_guess_y)
-        
-        # Fitted profiles
-        fitted_profile_x: np.ndarray = gaussian(x, *poptx)
-        fitted_profile_y: np.ndarray = gaussian(y, *popty)
-
         # Calculate uncertainties
         def determine_uncertainty(popt: np.ndarray, pcov: np.ndarray, x: np.ndarray, OD_prof: np.ndarray) -> np.ndarray:
             residuals: np.ndarray = OD_prof - gaussian(x, *popt)
@@ -103,10 +81,43 @@ class AnalyseOD:
             parameter_variances: np.ndarray = np.diag(pcov)
             return np.sqrt(parameter_variances)
         
+
+        def gaussian_2d(x, y, x0, y0, sigma_x, sigma_y, A):
+           
+            exponent = ((x - x0) ** 2) / (2 * sigma_x ** 2) + ((y - y0) ** 2) / (2 * sigma_y ** 2)
+            return A * np.exp(-exponent)
+        
+        roi_x_start: int = self.analys_ROI[0]
+        roi_x_end: int = self.analys_ROI[1]
+        roi_y_start: int = self.analys_ROI[2]
+        roi_y_end: int = self.analys_ROI[3]
+        
+        # Grid for the image 
+        x: np.ndarray = np.arange(OD.shape[1])
+        y: np.ndarray = np.arange(OD.shape[0])
+        OD_x: np.ndarray = OD[230, :]
+        OD_y: np.ndarray = OD[:, 270]
+
+        # Initial guesses for the fits
+        initial_guess_x: tuple = (np.amax(OD_x), np.mean(OD_x), 70)
+        initial_guess_y: tuple = (np.amax(OD_y), np.mean(OD_y), 70)
+        
+        # Curve fitting
+        poptx, pcovx = curve_fit(gaussian, x, OD_x, p0=initial_guess_x)
+        popty, pcovy = curve_fit(gaussian, y, OD_y, p0=initial_guess_y)
+        
+        # Fitted profiles
+        fitted_profile_x: np.ndarray = gaussian(x, *poptx)
+        fitted_profile_y: np.ndarray = gaussian(y, *popty)
         parameters_uncertainty_x: np.ndarray = determine_uncertainty(poptx, pcovx, x, OD_prof=OD[int((roi_y_end - roi_y_start) / 2), :])
         parameters_uncertainty_y: np.ndarray = determine_uncertainty(popty, pcovy, y, OD_prof=OD[:, int((roi_x_end - roi_x_start) / 2)])
+        print(poptx[0])
         
-        return fitted_profile_x, fitted_profile_y, parameters_uncertainty_x, parameters_uncertainty_y
+        x_mesh, y_mesh = np.meshgrid(x, y)
+        profile2D = gaussian_2d(x_mesh, y_mesh, poptx[1],popty[1], poptx[2], popty[2], poptx[0]) 
+     
+
+        return fitted_profile_x, fitted_profile_y, profile2D
 
     def fit_cloud_profile_gaussian2D(self, OD: np.ndarray) -> tuple:
         # Fit 2D Gaussian profile of the cloud
